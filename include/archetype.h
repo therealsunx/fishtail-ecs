@@ -122,22 +122,5 @@ namespace trecs {
             if(!_has_empty) index = table.begin()->second.size()-1;
             return index;
         }
-#ifdef TR_DEBUG 
-        inline void debugsymbols() const {
-            std::cout << "\n==== archetype : " << std::bitset<32>(id) << " ====\n";
-            std::cout << "- empty slots : ";
-            for(auto it:_emptySlots){
-                std::cout << it << ", ";
-            }
-            std::cout << "\n- plus archetypes : ";
-            for(auto& [c_id, arch] : plus){
-                std::cout << "(" << id << "+" << c_id << "=" << arch->id << ")";
-            }
-            std::cout << "\n- minus archetypes : ";
-            for(auto& [c_id, arch] : minus){
-                std::cout << "(" << id << "-" << c_id << "=" << arch->id << ")";
-            }
-        }
-#endif
     };
 }

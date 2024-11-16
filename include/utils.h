@@ -1,6 +1,5 @@
 #pragma once
 
-#define TR_DEBUG
 #define TR_ASSERT
 
 #ifdef TR_ASSERT
