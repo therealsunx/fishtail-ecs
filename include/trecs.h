@@ -61,7 +61,7 @@ namespace trecs {
                 
                 archetype_id_t id = c_id | p_arch->id;
 
-                Assert(!(p_arch->id & c_id), "component already exists on the entity. TODO: override");
+                Assert(!(p_arch->id & c_id), "Component already exists on the entity. TODO: override");
                 
                 archetype_t* n_arch = p_arch->has_plus(c_id)
                     ? p_arch->get_plus(c_id)
@@ -72,7 +72,33 @@ namespace trecs {
                 rec.index = n_arch->add_entry(en);
                 rec.archeType = n_arch;
 #ifdef TR_DEBUG 
-                std::cout << "\n\n================= rec added : " << c_id << " ===================";
+                std::cout << "\n\n================= rec added : " << entity << "-" << c_id << " ===================";
+                p_arch->debugsymbols();
+                rec.debugsymbols();
+                n_arch->debugsymbols();
+#endif
+            }
+
+            template<typename T>
+            inline void removeComponent(entity_t entity){
+                comp_id_t c_id = _get_comp_type_id<T>();
+                Assert(entity < _records.size(), "Invalid entity");
+                record_t& rec = _records[entity];
+                archetype_t *p_arch = rec.archeType;
+                Assert(p_arch->id & c_id, "Attempt to remove non-existent component");
+
+                archetype_id_t id = p_arch->id & (~c_id);
+                archetype_t* n_arch = p_arch->has_minus(c_id)
+                    ? p_arch->get_minus(c_id)
+                    : p_arch->add_minus(c_id, _getNewArchetype(id));
+                entry_t en = p_arch->remove_entry(rec.index);
+                Assert(en.find(c_id) != en.end(), "Failed to remove component");
+                en.erase(c_id);
+
+                rec.index = n_arch->add_entry(en);
+                rec.archeType = n_arch;
+#ifdef TR_DEBUG 
+                std::cout << "\n\n================= rec removed : " << entity << "-" << c_id << " ===================";
                 p_arch->debugsymbols();
                 rec.debugsymbols();
                 n_arch->debugsymbols();
@@ -99,11 +125,12 @@ namespace trecs {
                 return std::any_cast<T&>(rec.archeType->table[_get_comp_type_id<T>()]
                         .at(rec.index));
             }
-
+# if 0
             template<typename T>
             inline comp_id_t getComponentID(){
                 return _get_comp_type_id<T>();
             }
+#endif
 
         private:
             entity_records_t _records;

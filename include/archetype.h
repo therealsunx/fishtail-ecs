@@ -38,8 +38,7 @@ namespace trecs {
 
         public:
         inline comprow_t& operator[](comp_id_t id){
-            Assert(table.find(id) != table.end(), "Tried to get neighbour \
-                    archetype for invalid archetype");
+            Assert(table.find(id) != table.end(), "archetype doesnot have component");
             return table[id];
         }
 
@@ -50,26 +49,26 @@ namespace trecs {
             return table.end();
         }
 
-        inline comptable_t::const_iterator cbegin(){
+        inline comptable_t::const_iterator cbegin() const {
             return table.cbegin();
         }
-        inline comptable_t::const_iterator cend(){
+        inline comptable_t::const_iterator cend() const {
             return table.cend();
         }
 
-        inline bool has_plus(comp_id_t comp){
+        inline bool has_plus(comp_id_t comp) const {
             return plus.find(comp) != plus.end();
         }
-        inline bool has_minus(comp_id_t comp){
+        inline bool has_minus(comp_id_t comp) const {
             return minus.find(comp) != minus.end();
         }
 
-        inline archetype_t* get_plus(comp_id_t comp){
-            Assert(has_plus(comp), "Tried to get neighbour archetype for invalid archetype");
+        inline archetype_t* get_plus(comp_id_t comp) const {
+            Assert(has_plus(comp), "Tried to get plus-neighbour archetype for invalid component");
             return plus.find(comp)->second;
         }
-        inline archetype_t* get_minus(comp_id_t comp){
-            Assert(has_plus(comp), "Tried to get neighbour archetype for invalid archetype");
+        inline archetype_t* get_minus(comp_id_t comp) const {
+            Assert(has_minus(comp), "Tried to get minus-neighbour archetype for invalid component");
             return minus.find(comp)->second;
         }
 
@@ -89,7 +88,6 @@ namespace trecs {
         inline entry_t remove_entry(size_t index){
             Assert(_emptySlots.count(index) == 0, "Attempt to access empty slot");
             _emptySlots.insert(index);
-
             bool clearmark = table.begin() == table.end();
             entry_t ent;
             for(auto& [c_id, vec]:table){
@@ -101,38 +99,42 @@ namespace trecs {
                     clearmark = true;
                 }
             }
-            if(clearmark){
-                _emptySlots.clear();
-            }
+            if(clearmark) _emptySlots.clear();
             return ent;
         }
 
         inline size_t add_entry(entry_t& entry){
+            if(entry.begin() == entry.end()) return 0; //special case
+
             bool _has_empty = _emptySlots.begin() != nullptr;
-            int index = _has_empty? *_emptySlots.begin() : -1;
+            int index = -1;
+            if(_has_empty){
+                index = *_emptySlots.begin();
+                _emptySlots.erase(index);
+            }
             for(auto& [c_id, comp]: entry){
                 if(_has_empty){
                     table[c_id][index] = comp;
                 }else{
                     table[c_id].push_back(comp);
-                    index = table[c_id].size()-1;
                 }
             }
+            if(!_has_empty) index = table.begin()->second.size()-1;
             return index;
         }
 #ifdef TR_DEBUG 
-        inline void debugsymbols(){
+        inline void debugsymbols() const {
             std::cout << "\n==== archetype : " << std::bitset<32>(id) << " ====\n";
             std::cout << "- empty slots : ";
             for(auto it:_emptySlots){
                 std::cout << it << ", ";
             }
             std::cout << "\n- plus archetypes : ";
-            for(auto [c_id, arch] : plus){
+            for(auto& [c_id, arch] : plus){
                 std::cout << "(" << id << "+" << c_id << "=" << arch->id << ")";
             }
             std::cout << "\n- minus archetypes : ";
-            for(auto [c_id, arch] : minus){
+            for(auto& [c_id, arch] : minus){
                 std::cout << "(" << id << "-" << c_id << "=" << arch->id << ")";
             }
         }
