@@ -1,2 +1,5 @@
 # directories
 build/
+.vscode/
+
+main

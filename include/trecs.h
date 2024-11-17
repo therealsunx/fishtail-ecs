@@ -14,8 +14,12 @@
 
 #include "archetype.h"
 
+#define __entity_id__(x) (x & 0x00ffffff)
+#define __entity_rc__(x) (x & 0xff000000)
+
 
 namespace trecs {
+
     using entity_t = uint32_t;
 
     struct record_t {
@@ -26,66 +30,142 @@ namespace trecs {
 
     using archetype_map_t = std::unordered_map<archetype_id_t, archetype_t>;
     using entity_records_t = std::vector<record_t>;
+    using recycleReg_t = std::vector<entity_t>;
 
     class registry_t {
+// this macro is usable only inside templated methods, to make things easier... 
+#define __ctype__ _get_comp_type_id<T>()
         public:
             registry_t(){
                 _archetypeStore[0] = {/*root*/};
+                _records.push_back({}); // leave first slot empty, entity 0 never exists
             }
 
             inline entity_t create(){
+                while(!_recycleReg.empty()){
+                    int en = _recycleReg.back();
+                    _recycleReg.pop_back();
+                    int rc = __entity_rc__(en);
+                    if(rc < 0xff){
+                        return ((rc+1)<<24) | __entity_id__(en);
+                    }
+                }
+
                 _records.push_back(record_t{&_archetypeStore[0], 0});
-                return __entity_generator++;
+                return ++__entity_generator;
+            }
+
+            inline void destroy(entity_t entity){
+                Assert(__entity_id__(entity) <= _records.size(), "Invalid entity");
+                const entity_t ind = __entity_id__(entity);
+                record_t& rec = _records[ind];
+                auto en = rec.archeType->remove_entry(rec.index) ;
+                if(en.updatedEntity) _records[__entity_id__(en.updatedEntity)].index = rec.index;
+                rec.archeType = &_archetypeStore[0];
+                _recycleReg.push_back(entity);
             }
 
             template<typename T>
-            inline void tryAddComponent(const entity_t entity, T data){
-                if(hasComponent<T>(entity)) return;
-                addComponent<T>(entity, data);
+            inline bool tryAdd(const entity_t entity, T data){
+                if(has<T>(entity)) return false;
+                add<T>(entity, data);
+                return true;
             }
 
             template<typename T>
-            inline void forceAddComponent(const entity_t entity, T data){
-                if(hasComponent<T>(entity)) updateComponent<T>(entity, data);
-                else addComponent<T>(entity, data);
+            inline void addOrUpdate(const entity_t entity, T data){
+                if(has<T>(entity)) update<T>(entity, data);
+                else add<T>(entity, data);
             }
 
             template<typename T>
-            inline void updateComponent(const entity_t entity, T data){
-                comp_id_t c_id = _get_comp_type_id<T>();
-                record_t& rec = _records[entity];
-                Assert(rec.archeType->id & c_id, "Entity does not have the component to update");
-                (*rec.archeType)[c_id][rec.index] = data;
+            inline void update(const entity_t entity, T data){
+                const entity_t ind = __entity_id__(entity);
+                Assert(ind < _records.size(), "Invalid entity");
+                record_t& rec = _records[ind];
+                Assert(rec.archeType->id & __ctype__, "Entity does not have the component to update");
+                (*rec.archeType)[__ctype__][rec.index] = data;
             }
 
             template<typename T>
-            void addComponent(const entity_t entity, T data){
-                comp_id_t c_id = _get_comp_type_id<T>();
-                record_t& rec = _records[entity];
+            void add(const entity_t entity, T data){
+                const entity_t ind = __entity_id__(entity);
+                Assert(ind < _records.size(), "Invalid entity");
+                comp_id_t c_id = __ctype__;
+                record_t& rec = _records[ind];
                 archetype_t *p_arch = rec.archeType;
 
-                Assert(!(p_arch->id & c_id), "Component already exists on the entity. TODO: override");
+                Assert(!(p_arch->id & c_id), "Component already exists on the entity");
                 
                 archetype_t* n_arch = p_arch->has_plus(c_id)
                     ? p_arch->get_plus(c_id)
                     : p_arch->add_plus(c_id, _getNewArchetype(c_id | p_arch->id));
 
                 entry_t en = p_arch->remove_entry(rec.index);
-                en[c_id] = data;
+                en.entry[c_id] = data;
+                if(en.updatedEntity) _records[__entity_id__(en.updatedEntity)].index = rec.index;
+                en.updatedEntity = entity;
                 rec.index = n_arch->add_entry(en);
                 rec.archeType = n_arch;
             }
 
-            template<typename T>
-            inline void tryRemoveComponent(entity_t entity){
-                if(hasComponent<T>(entity)) removeComponent<T>(entity);
+            template<typename... T>
+            inline void tryRemove(entity_t entity){
+                (_tryRemove<T>(entity), ...);
+            }
+            
+            template<typename... T>
+            inline void remove(entity_t entity){
+                (_remove<T>(entity), ...);
+            }
+            
+            template<typename... T>
+            inline bool has(const entity_t entity){
+                Assert(__entity_id__(entity) < _records.size(), "Invalid entity");
+                return (_has_findex<T>(__entity_id__(entity)) && ...);
             }
 
             template<typename T>
-            inline void removeComponent(entity_t entity){
-                comp_id_t c_id = _get_comp_type_id<T>();
+            inline bool tryGet(const entity_t entity, T& output){
+                if(!has<T>(entity)) return false;
+                output = get<T>(entity);
+                return true;
+            }
 
-                record_t& rec = _records[entity];
+            template<typename... T>
+            inline auto gets(const entity_t entity){
+                const entity_t ind = __entity_id__(entity);
+                Assert(ind <= _records.size(), "Invalid entity");
+                return std::make_tuple(_get_findex<T>(__entity_id__(entity))...);
+            }
+
+            template<typename T>
+            inline T get(const entity_t entity){
+                const entity_t ind = __entity_id__(entity);
+                Assert(ind <= _records.size(), "Invalid entity");
+                Assert(_records[ind].archeType->id & __ctype__, "Entity does not have the component");
+                return _get_findex<T>(ind);
+            }
+
+        private:
+            template<typename T>
+            inline T _get_findex(const size_t ind){
+                return std::any_cast<T>((*_records[ind].archeType)[__ctype__]
+                        .at(_records[ind].index));
+            }
+
+            template<typename T>
+            inline bool _has_findex(const size_t ind){
+                return __ctype__ & _records[ind].archeType->id;
+            }
+
+            template<typename T>
+            inline void _remove(entity_t entity){
+                const entity_t ind = __entity_id__(entity);
+                Assert(ind < _records.size(), "Invalid entity");
+                comp_id_t c_id = __ctype__;
+
+                record_t& rec = _records[ind];
                 archetype_t* p_arch = rec.archeType;
                 Assert(p_arch->id & c_id, "Attempt to remove non-existent component");
 
@@ -94,53 +174,22 @@ namespace trecs {
                     : p_arch->add_minus(c_id, _getNewArchetype(p_arch->id & (~c_id)));
 
                 entry_t en = p_arch->remove_entry(rec.index);
-                en.erase(c_id);
+                en.entry.erase(c_id);
+                if(en.updatedEntity) _records[__entity_id__(en.updatedEntity)].index = rec.index;
+                en.updatedEntity = entity;
                 rec.index = n_arch->add_entry(en);
                 rec.archeType = n_arch;
             }
 
             template<typename T>
-            inline bool hasComponent(const entity_t entity){
-                Assert(entity < _records.size(), "Invalid entity");
-                return _get_comp_type_id<T>() & _records[entity].archeType->id;
+            inline void _tryRemove(const entity_t entity){
+                if(has<T>(entity)) _remove<T>(entity);
             }
-
-            template<typename T>
-            inline bool tryGetComponent(const entity_t entity, T& output){
-                if(!hasComponent<T>(entity)) return false;
-                output = getComponent<T>(entity);
-                return true;
-            }
-
-            template<typename T>
-            inline T getComponent(const entity_t entity){
-                Assert(entity < _records.size(), "Invalid entity");
-                comp_id_t c_id = _get_comp_type_id<T>();
-                record_t& rec = _records[entity];
-                Assert(rec.archeType->id & c_id, "Entity does not have the component");
-                return std::any_cast<T>(rec.archeType->table[_get_comp_type_id<T>()]
-                        .at(rec.index));
-            }
-
-# if 0
-            template<typename T>
-                inline T& getComponentRef(const entity_t entity){
-                    Assert(entity < _records.size(), "Invalid entity");
-                    comp_id_t c_id = _get_comp_type_id<T>();
-                    record_t& rec = _records[entity];
-                    Assert(rec.archeType->id & c_id, "Entity does not have the component");
-                    return std::any_cast<T&>(rec.archeType->table[c_id].at(rec.index));
-                }
-
-            template<typename T>
-            inline comp_id_t getComponentID(){
-                return _get_comp_type_id<T>();
-            }
-#endif
 
         private:
             entity_records_t _records;
             archetype_map_t _archetypeStore;
+            recycleReg_t _recycleReg;
             entity_t __entity_generator = 0;
 
             inline archetype_t* _getNewArchetype(archetype_id_t id){

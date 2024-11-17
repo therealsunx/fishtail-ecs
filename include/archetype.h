@@ -15,6 +15,7 @@
 
 namespace trecs {
 
+    using entity_t = uint32_t;
     using comp_id_t = uint64_t;
     using archetype_id_t = uint64_t;
 
@@ -23,20 +24,24 @@ namespace trecs {
 
     struct archetype_t;
     using archetype_edge_t = std::unordered_map<comp_id_t, archetype_t*>;
-    using emptyslots_t = std::unordered_set<size_t>;
-    using entry_t = std::unordered_map<comp_id_t, std::any>;
+
+    using entry_data_t = std::unordered_map<comp_id_t, std::any>;
+    struct entry_t {
+        entry_data_t entry;
+        entity_t updatedEntity = 0;
+    };
 
     struct archetype_t {
+        private:
+        std::vector<entity_t> _entities;
+
+        public:
         archetype_id_t id = 0;
-        comptable_t table; 
+        comptable_t table;
 
         archetype_edge_t plus;
         archetype_edge_t minus;
 
-        private:
-        emptyslots_t _emptySlots;
-
-        public:
         inline comprow_t& operator[](comp_id_t id){
             Assert(table.find(id) != table.end(), "archetype doesnot have component");
             return table[id];
@@ -86,41 +91,30 @@ namespace trecs {
         }
 
         inline entry_t remove_entry(size_t index){
-            Assert(_emptySlots.count(index) == 0, "Attempt to access empty slot");
-            _emptySlots.insert(index);
-            bool clearmark = table.begin() == table.end();
-            entry_t ent;
+            entry_t entr;
+            if(!_entities.size()) return entr;
             for(auto& [c_id, vec]:table){
-                Assert(index < vec.size(), "Invalid index to access from");
-                ent[c_id] = std::move(vec[index]);
-                vec[index] = {};
-                if(vec.size() == _emptySlots.size()){
-                    vec.clear();
-                    clearmark = true;
+                entr.entry[c_id] = std::move(vec[index]);
+                if(index != vec.size()-1){
+                    vec[index] = std::move(vec.back());
+                    if(!entr.updatedEntity){
+                        _entities[index] = _entities.back();
+                        entr.updatedEntity = _entities[index];
+                    }
                 }
+                vec.pop_back(); 
             }
-            if(clearmark) _emptySlots.clear();
-            return ent;
+            _entities.pop_back();
+            return entr;
         }
 
         inline size_t add_entry(entry_t& entry){
-            if(entry.begin() == entry.end()) return 0; //special case
-
-            bool _has_empty = _emptySlots.begin() != nullptr;
-            int index = -1;
-            if(_has_empty){
-                index = *_emptySlots.begin();
-                _emptySlots.erase(index);
+            if(entry.entry.begin() == entry.entry.end()) return 0; //special case
+            for(auto& [c_id, comp]: entry.entry){
+                table[c_id].push_back(comp);
             }
-            for(auto& [c_id, comp]: entry){
-                if(_has_empty){
-                    table[c_id][index] = comp;
-                }else{
-                    table[c_id].push_back(comp);
-                }
-            }
-            if(!_has_empty) index = table.begin()->second.size()-1;
-            return index;
+            _entities.push_back(entry.updatedEntity);
+            return _entities.size()-1;
         }
     };
 }
