@@ -37,6 +37,10 @@ int main(){
     registry.addOrUpdate<int>(e1, 21);
     assert(registry.get<int>(e1) == 21);
 
+    int& x__ = registry.get<int>(e1);
+    x__ = 54;
+    assert(registry.get<int>(e1) == 54);
+
     registry.update<int>(e1, 14);
     assert(registry.get<int>(e1) == 14);
 
@@ -94,24 +98,18 @@ int main(){
     }
     
     auto view = registry.view<float, int>();
-    float fsum = 0.f;
-    int isum = 0;
-    view.forEach([&fsum, &isum](float fv, int iv){
-            fsum += fv;
-            isum += iv;
+    view.forEach([](float fv, int& iv){
             printf("(%f, %d) ", fv, iv);
+            iv = 1224;
         });
 
     auto view2 = registry.view<int>();
-    isum = 0;
     std::cout << std::endl;
-    view2.forEach([&isum](int iv){
-            isum += iv;
+    view2.forEach([](int iv){
             printf("(%d) ", iv);
         });
 
 #endif
 
-    printf("\n\nAll test successful");
     return 0;
 }

@@ -38,7 +38,7 @@ namespace trecs {
     struct view_t {
         view_id_t id = 0;
 
-        inline void forEach(const std::function<void(T...)>& callback){
+        inline void forEach(const std::function<void(T&...)>& callback){
             size_t i = 0;
             archetype_map_t::iterator _cur_arch = _archmap.begin();
             archetype_map_t::iterator _end_arch = _archmap.end();
@@ -47,12 +47,12 @@ namespace trecs {
                     if(++_cur_arch == _end_arch) return;
                     i = 0;
                 }
-                callback(std::any_cast<T>(_cur_arch->second[__ctype__].at(i)) ...);
+                callback(std::any_cast<T&>(_cur_arch->second[__ctype__].at(i)) ...);
                 i++;
             }
         }
 
-        inline void forEach(const std::function<void(T..., entity_t)>& callback){
+        inline void forEach(const std::function<void(T&..., entity_t)>& callback){
             size_t i = 0;
             archetype_map_t::iterator _cur_arch = _archmap.begin();
             archetype_map_t::iterator _end_arch = _archmap.end();
@@ -61,7 +61,7 @@ namespace trecs {
                     if(++_cur_arch == _end_arch) return;
                     i = 0;
                 }
-                callback(std::any_cast<T>(_cur_arch->second[__ctype__].at(i)) ...,
+                callback(std::any_cast<T&>(_cur_arch->second[__ctype__].at(i)) ...,
                         _cur_arch->second.entityAt(i));
                 i++;
             }
@@ -184,15 +184,15 @@ namespace trecs {
                 const entity_t ind = __entity_id__(entity);
                 Assert(ind <= _records.size(), "Invalid entity");
                 return _records[ind].archeType->get<T...>(_records[ind].index);
-                //return std::make_tuple(_get_findex<T>(__entity_id__(entity))...);
             }
 
             template<typename T>
-            inline T get(const entity_t entity){
+            inline T& get(const entity_t entity){
                 const entity_t ind = __entity_id__(entity);
                 Assert(ind <= _records.size(), "Invalid entity");
                 Assert(_records[ind].archeType->id & __ctype__, "Entity does not have the component");
-                return _get_findex<T>(ind);
+                return std::any_cast<T&>((*_records[ind].archeType)[__ctype__]
+                        .at(_records[ind].index));
             }
 
             /*View Ops*/
@@ -204,12 +204,6 @@ namespace trecs {
             }
 
         private:
-            template<typename T>
-            inline T _get_findex(const size_t ind){
-                return std::any_cast<T>((*_records[ind].archeType)[__ctype__]
-                        .at(_records[ind].index));
-            }
-
             template<typename T>
             inline bool _has_findex(const size_t ind){
                 return __ctype__ & _records[ind].archeType->id;
