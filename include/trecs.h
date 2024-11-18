@@ -13,6 +13,7 @@
 
 
 #include "archetype.h"
+#include <functional>
 
 #define __entity_id__(x) (x & 0x00ffffff)
 #define __entity_rc__(x) (x & 0xff000000)
@@ -28,19 +29,61 @@ namespace trecs {
 
     };
 
+    using view_id_t = archetype_id_t;
     using archetype_map_t = std::unordered_map<archetype_id_t, archetype_t>;
     using entity_records_t = std::vector<record_t>;
     using recycleReg_t = std::vector<entity_t>;
 
+    template<typename... T>
+    struct view_t {
+        view_id_t id = 0;
+
+        inline void forEach(const std::function<void(T...)>& callback){
+            size_t i = 0;
+            archetype_map_t::iterator _cur_arch = _archmap.begin();
+            archetype_map_t::iterator _end_arch = _archmap.end();
+            while(1){
+                while(i >= _cur_arch->second.size() || (_cur_arch->first & id) != id){
+                    if(++_cur_arch == _end_arch) return;
+                    i = 0;
+                }
+                callback(std::any_cast<T>(_cur_arch->second[__ctype__].at(i)) ...);
+                i++;
+            }
+        }
+
+        inline void forEach(const std::function<void(T..., entity_t)>& callback){
+            size_t i = 0;
+            archetype_map_t::iterator _cur_arch = _archmap.begin();
+            archetype_map_t::iterator _end_arch = _archmap.end();
+            while(1){
+                while(i >= _cur_arch->second.size() || (_cur_arch->first & id) != id){
+                    if(++_cur_arch == _end_arch) return;
+                    i = 0;
+                }
+                callback(std::any_cast<T>(_cur_arch->second[__ctype__].at(i)) ...,
+                        _cur_arch->second.entityAt(i));
+                i++;
+            }
+        }
+
+        private:
+        archetype_map_t& _archmap;
+        friend class registry_t;
+
+        view_t(view_id_t id_, archetype_map_t& arch_):id(id_), _archmap(arch_){}
+    };
+
     class registry_t {
-// this macro is usable only inside templated methods, to make things easier... 
-#define __ctype__ _get_comp_type_id<T>()
         public:
             registry_t(){
                 _archetypeStore[0] = {/*root*/};
                 _records.push_back({}); // leave first slot empty, entity 0 never exists
             }
 
+            /*Entity Ops*/
+
+            /*creates an entity*/
             inline entity_t create(){
                 while(!_recycleReg.empty()){
                     int en = _recycleReg.back();
@@ -59,12 +102,16 @@ namespace trecs {
                 Assert(__entity_id__(entity) <= _records.size(), "Invalid entity");
                 const entity_t ind = __entity_id__(entity);
                 record_t& rec = _records[ind];
-                auto en = rec.archeType->remove_entry(rec.index) ;
+                auto en = rec.archeType->remove_entry(rec.index);
                 if(en.updatedEntity) _records[__entity_id__(en.updatedEntity)].index = rec.index;
                 rec.archeType = &_archetypeStore[0];
                 _recycleReg.push_back(entity);
             }
 
+            /*Component Ops*/
+            /* returns the component-type's id*/
+
+            /*tries to add component if not already added*/
             template<typename T>
             inline bool tryAdd(const entity_t entity, T data){
                 if(has<T>(entity)) return false;
@@ -133,10 +180,11 @@ namespace trecs {
             }
 
             template<typename... T>
-            inline auto gets(const entity_t entity){
+            inline std::tuple<T...> gett(const entity_t entity){
                 const entity_t ind = __entity_id__(entity);
                 Assert(ind <= _records.size(), "Invalid entity");
-                return std::make_tuple(_get_findex<T>(__entity_id__(entity))...);
+                return _records[ind].archeType->get<T...>(_records[ind].index);
+                //return std::make_tuple(_get_findex<T>(__entity_id__(entity))...);
             }
 
             template<typename T>
@@ -145,6 +193,14 @@ namespace trecs {
                 Assert(ind <= _records.size(), "Invalid entity");
                 Assert(_records[ind].archeType->id & __ctype__, "Entity does not have the component");
                 return _get_findex<T>(ind);
+            }
+
+            /*View Ops*/
+            /*Returns the view to components*/
+            template<typename... T>
+            inline view_t<T...> view(){
+                view_t<T...> view((_get_comp_type_id<T>() | ...), _archetypeStore);
+                return view;
             }
 
         private:
@@ -197,14 +253,6 @@ namespace trecs {
                 auto& a = _archetypeStore.try_emplace(id, archetype_t{}).first->second;
                 a.id = id;
                 return &a;
-            }
-
-        private:
-            uint32_t _comp_t_counter = 0;
-            template<typename t>
-            inline comp_id_t _get_comp_type_id(){
-                static comp_id_t id = 1ull << _comp_t_counter++;
-                return id;
             }
     };
 }

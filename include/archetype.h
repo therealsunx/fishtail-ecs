@@ -31,10 +31,21 @@ namespace trecs {
         entity_t updatedEntity = 0;
     };
 
+
+    static uint32_t __comp_type_ctr__ = 0;
+    template<typename t>
+    inline comp_id_t _get_comp_type_id(){
+        static comp_id_t id = 1ull << __comp_type_ctr__++;
+        return id;
+    }
+// this macro is usable only inside templated methods, to make things easier... 
+#define __ctype__ _get_comp_type_id<T>()
+
+
     struct archetype_t {
         private:
         std::vector<entity_t> _entities;
-
+        
         public:
         archetype_id_t id = 0;
         comptable_t table;
@@ -45,6 +56,19 @@ namespace trecs {
         inline comprow_t& operator[](comp_id_t id){
             Assert(table.find(id) != table.end(), "archetype doesnot have component");
             return table[id];
+        }
+
+        inline size_t size(){
+            return _entities.size();
+        }
+
+        inline entity_t entityAt(size_t index){
+             return _entities.at(index);
+        }
+
+        template<typename... T>
+        inline std::tuple<T...> get(size_t index){
+            return std::make_tuple(std::any_cast<T>(table[__ctype__].at(index))...);
         }
 
         inline comptable_t::iterator begin(){

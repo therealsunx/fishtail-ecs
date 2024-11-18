@@ -2,7 +2,6 @@
 #include <cassert>
 
 #define __norm_cmds_test 0
-#define __query_cmd_test 1
  
 
 // TODO: Do I want archtype graph to be updated on each add new component
@@ -66,16 +65,15 @@ int main(){
     registry.add<int>(e4, 100);
 
     assert(registry.get<int>(e4) == 100);
-#endif
-#if __query_cmd_test
-    trecs::entity_t e1 = registry.create();
+    registry.destroy(e1);
 
+    e1 = registry.create();
     registry.add<int>(e1, 100);
     registry.add<float>(e1, 3.122f);
     registry.add<char>(e1, 's');
     
 
-    auto d = registry.gets<int, float, char>(e1);
+    auto d = registry.gett<int, float, char>(e1);
     assert(std::get<int>(d) == 100 && std::get<float>(d) == 3.122f && std::get<char>(d) == 's');
     assert(registry.has<int>(e1));
     bool x = registry.has<int, float>(e1);
@@ -87,8 +85,33 @@ int main(){
     
     assert(!(registry.has<int, float, char>(e1)));
 
+#else
+
+    for(int i=0; i<10; i++){
+        trecs::entity_t e = registry.create();
+        registry.add<int>(e, i+1);
+        if(i%2 == 0) registry.add<float>(e, i+1.0001f);
+    }
+    
+    auto view = registry.view<float, int>();
+    float fsum = 0.f;
+    int isum = 0;
+    view.forEach([&fsum, &isum](float fv, int iv){
+            fsum += fv;
+            isum += iv;
+            printf("(%f, %d) ", fv, iv);
+        });
+
+    auto view2 = registry.view<int>();
+    isum = 0;
+    std::cout << std::endl;
+    view2.forEach([&isum](int iv){
+            isum += iv;
+            printf("(%d) ", iv);
+        });
+
 #endif
 
-    printf("All test successful");
+    printf("\n\nAll test successful");
     return 0;
 }
