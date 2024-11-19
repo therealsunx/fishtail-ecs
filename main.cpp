@@ -1,14 +1,8 @@
-#include "include/trecs.h"
+#include "single-include/trecs.h"
 #include <cassert>
 
-#define __norm_cmds_test 0
+#define __norm_cmds_test 1
  
-
-// TODO: Do I want archtype graph to be updated on each add new component
-// TODO: If any case, make an iterator that goes over the query
-// TODO: query the components individually : <comp1>
-// TODO: query the component collection/pairs like : <comp1, comp2>
-
 
 struct position {
     float x=0,y=0;
