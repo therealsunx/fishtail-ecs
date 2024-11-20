@@ -1,6 +1,10 @@
 # The Real ECS a.k.a trecs
 
-TR-ECS is an Entity Component System library written in C/C++. It is a header only library, so simply copy the headers folder a.k.a `include` into your project to use it.
+TR-ECS is an Entity Component System library written in C/C++. 
+
+It is a header only library, so simply copy the headers folder a.k.a `include` into your project to use it.
+
+It also has a single include header file, just to make things easier.
 
 It is suitable for making games and stuff. It prevents you from the pitfalls of OOP and inheritance while creating different objects for your games.
 

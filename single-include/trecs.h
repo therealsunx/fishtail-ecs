@@ -253,8 +253,6 @@ namespace trecs {
             }
 
             /*Component Ops*/
-            /* returns the component-type's id*/
-
             /*tries to add component if not already added*/
             template<typename T>
             inline bool tryAdd(const entity_t entity, T data){
