@@ -1,4 +1,8 @@
-# The Real ECS a.k.a trecs
+# TR-ECS
+
+<p align="center">
+    <img src="trecs_logo.png" />
+</p>
 
 TR-ECS is an Entity Component System library written in C/C++. 
 
@@ -10,9 +14,11 @@ It is suitable for making games and stuff. It prevents you from the pitfalls of 
 
 Learn more about ECS in [wikipedia](https://en.wikipedia.org/wiki/Entity_component_system).
 
-## Usage & Development
+## Usage
 
 If you want to use it (after it is complete, of course), then simply copy the `include/` directory inside your C++ project and you're ready to roll.
+
+# Development
 
 If want to continue developing it from its current state, then clone the repo, and go on using the ECS-registry. Everything that you need starts inside the `include/trecs.h` header file.
 
